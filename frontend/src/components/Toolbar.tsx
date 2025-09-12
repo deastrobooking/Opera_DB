@@ -15,22 +15,19 @@ const Toolbar: React.FC<ToolbarProps> = ({
   relationships 
 }) => {
   const handleAddTable = () => {
-    const tableName = prompt('Enter table name:');
-    if (tableName) {
-      onAddTable({
-        name: tableName,
-        columns: [
-          {
-            name: 'id',
-            type: 'INTEGER',
-            nullable: false,
-            primary_key: true,
-            unique: true
-          }
-        ],
-        position: { x: Math.random() * 400, y: Math.random() * 300 }
-      });
-    }
+    onAddTable({
+      name: 'new_table',
+      columns: [
+        {
+          name: 'id',
+          type: 'INTEGER',
+          nullable: false,
+          primary_key: true,
+          unique: true
+        }
+      ],
+      position: { x: Math.random() * 400, y: Math.random() * 300 }
+    });
   };
 
   const exportSQL = () => {
@@ -59,6 +56,32 @@ const Toolbar: React.FC<ToolbarProps> = ({
     });
   };
 
+  const exportPostgreSQL = () => {
+    const schema = { tables, relationships };
+    
+    fetch('http://localhost:8000/api/generate-postgresql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(schema),
+    })
+    .then(response => response.json())
+    .then(data => {
+      const element = document.createElement('a');
+      const file = new Blob([data.sql], { type: 'text/plain' });
+      element.href = URL.createObjectURL(file);
+      element.download = 'postgresql_schema.sql';
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+    })
+    .catch(error => {
+      console.error('Error exporting PostgreSQL:', error);
+      alert('Error exporting PostgreSQL. Please check the console.');
+    });
+  };
+
   return (
     <div className="toolbar">
       <button className="btn" onClick={handleAddTable}>
@@ -69,6 +92,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
       </button>
       <button className="btn btn-secondary" onClick={exportSQL}>
         Export SQL
+      </button>
+      <button className="btn btn-secondary" onClick={exportPostgreSQL}>
+        Export PostgreSQL
       </button>
       <span style={{ marginLeft: 'auto', color: '#6c757d' }}>
         Tables: {tables.length} | Relationships: {relationships.length}
