@@ -237,7 +237,7 @@ async def generate_postgresql(schema: ERDSchema):
         columns_sql = []
         for column in table.columns:
             # Convert types to PostgreSQL-specific types
-            pg_type = convert_to_postgresql_type(column.type)
+            pg_type = convert_to_postgresql_type(column.type, column.primary_key)
             col_def = f"{column.name} {pg_type}"
             
             if not column.nullable:
@@ -269,7 +269,7 @@ async def generate_postgresql(schema: ERDSchema):
                     if fk_match:
                         ref_table, ref_column = fk_match.groups()
                         constraint_name = f"fk_{table.name}_{column.name}"
-                        alter_sql = f"ALTER TABLE {table.name}\n    ADD CONSTRAINT {constraint_name}\n    FOREIGN KEY ({column.name})\n    REFERENCES {ref_table}({ref_column})\n    ON DELETE CASCADE;"
+                        alter_sql = f"ALTER TABLE {table.name}\n    ADD CONSTRAINT {constraint_name}\n    FOREIGN KEY ({column.name})\n    REFERENCES {ref_table.lower()}({ref_column.lower()})\n    ON DELETE RESTRICT;"
                         sql_statements.append(alter_sql)
                         sql_statements.append("")
     
@@ -285,11 +285,9 @@ async def generate_postgresql(schema: ERDSchema):
     
     return {"sql": "\n".join(sql_statements)}
 
-def convert_to_postgresql_type(sql_type: str) -> str:
+def convert_to_postgresql_type(sql_type: str, is_primary_key: bool = False) -> str:
     """Convert generic SQL types to PostgreSQL-specific types"""
     type_mapping = {
-        "INTEGER": "SERIAL",
-        "INT": "SERIAL",
         "VARCHAR(255)": "VARCHAR(255)",
         "TEXT": "TEXT",
         "TIMESTAMP": "TIMESTAMP WITH TIME ZONE",
@@ -301,9 +299,12 @@ def convert_to_postgresql_type(sql_type: str) -> str:
         "DOUBLE": "DOUBLE PRECISION"
     }
     
-    # Handle specific patterns
     upper_type = sql_type.upper()
-    if upper_type in type_mapping:
+    
+    # Handle INTEGER/INT types - only use SERIAL for primary keys
+    if upper_type in ["INTEGER", "INT"]:
+        return "SERIAL" if is_primary_key else "INTEGER"
+    elif upper_type in type_mapping:
         return type_mapping[upper_type]
     elif upper_type.startswith("VARCHAR"):
         return sql_type  # Keep VARCHAR with length
