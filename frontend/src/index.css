@@ -221,3 +221,42 @@ code {
 .cancel-btn:hover {
   background: rgba(220, 53, 69, 0.1);
 }
+
+/* Enhanced column editing properties */
+.column-properties {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.property-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.property-checkbox input[type="checkbox"] {
+  margin: 0;
+  scale: 0.8;
+}
+
+.property-checkbox span {
+  font-weight: 500;
+  color: #555;
+}
+
+.default-input {
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 10px;
+  outline: none;
+  width: 60px;
+}
+
+.default-input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 1px rgba(0, 123, 255, 0.25);
+}

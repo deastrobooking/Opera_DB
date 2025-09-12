@@ -17,6 +17,10 @@ const TableNode: React.FC<TableNodeProps> = memo(({ data }) => {
   const [tempColumnName, setTempColumnName] = useState('');
   const [tempColumnType, setTempColumnType] = useState('');
   const [tempTableName, setTempTableName] = useState(table.name);
+  const [tempNullable, setTempNullable] = useState(true);
+  const [tempPrimaryKey, setTempPrimaryKey] = useState(false);
+  const [tempUnique, setTempUnique] = useState(false);
+  const [tempDefault, setTempDefault] = useState('');
 
   const handleAddColumn = () => {
     const newColumn = {
@@ -42,6 +46,10 @@ const TableNode: React.FC<TableNodeProps> = memo(({ data }) => {
     setEditingColumn(index);
     setTempColumnName(column.name);
     setTempColumnType(column.type);
+    setTempNullable(column.nullable);
+    setTempPrimaryKey(column.primary_key);
+    setTempUnique(column.unique);
+    setTempDefault(column.default || '');
   };
 
   const handleSaveColumn = (index: number) => {
@@ -50,6 +58,10 @@ const TableNode: React.FC<TableNodeProps> = memo(({ data }) => {
       ...updatedColumns[index],
       name: tempColumnName,
       type: tempColumnType,
+      nullable: tempNullable,
+      primary_key: tempPrimaryKey,
+      unique: tempUnique,
+      default: tempDefault || undefined
     };
     data.onUpdate({ columns: updatedColumns });
     setEditingColumn(null);
@@ -59,6 +71,10 @@ const TableNode: React.FC<TableNodeProps> = memo(({ data }) => {
     setEditingColumn(null);
     setTempColumnName('');
     setTempColumnType('');
+    setTempNullable(true);
+    setTempPrimaryKey(false);
+    setTempUnique(false);
+    setTempDefault('');
   };
 
   const handleEditTableName = () => {
@@ -147,16 +163,21 @@ const TableNode: React.FC<TableNodeProps> = memo(({ data }) => {
           {editingColumn === index ? (
             <div className="column-edit" style={{ flex: 1 }}>
               <div className="column-edit-row">
-                <div className="column-icons">
-                  {column.primary_key && <span className="primary-key">🔑</span>}
-                  {column.foreign_key && <span className="foreign-key">🔗</span>}
-                </div>
                 <input
                   type="text"
                   value={tempColumnName}
                   onChange={(e) => setTempColumnName(e.target.value)}
                   className="column-name-input"
                   placeholder="Column name"
+                  style={{ flex: 2 }}
+                />
+                <input
+                  type="text"
+                  value={tempColumnType}
+                  onChange={(e) => setTempColumnType(e.target.value)}
+                  className="column-type-input"
+                  placeholder="Type"
+                  style={{ flex: 1 }}
                 />
                 <button
                   className="save-btn"
@@ -173,13 +194,37 @@ const TableNode: React.FC<TableNodeProps> = memo(({ data }) => {
                   ×
                 </button>
               </div>
-              <div className="column-edit-row">
+              <div className="column-edit-row column-properties">
+                <label className="property-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={tempPrimaryKey}
+                    onChange={(e) => setTempPrimaryKey(e.target.checked)}
+                  />
+                  <span>PK</span>
+                </label>
+                <label className="property-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={tempUnique}
+                    onChange={(e) => setTempUnique(e.target.checked)}
+                  />
+                  <span>Unique</span>
+                </label>
+                <label className="property-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={!tempNullable}
+                    onChange={(e) => setTempNullable(!e.target.checked)}
+                  />
+                  <span>NOT NULL</span>
+                </label>
                 <input
                   type="text"
-                  value={tempColumnType}
-                  onChange={(e) => setTempColumnType(e.target.value)}
-                  className="column-type-input"
-                  placeholder="Column type"
+                  value={tempDefault}
+                  onChange={(e) => setTempDefault(e.target.value)}
+                  className="default-input"
+                  placeholder="Default"
                 />
               </div>
             </div>
