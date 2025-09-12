@@ -11,3 +11,122 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.toolbar {
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  padding: 10px 20px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn:hover {
+  background: #0056b3;
+}
+
+.btn-secondary {
+  background: #6c757d;
+}
+
+.btn-secondary:hover {
+  background: #545b62;
+}
+
+.diagram-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.sql-editor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sql-editor-header {
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  padding: 10px 15px;
+  font-weight: 600;
+}
+
+.sql-editor-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.sql-editor-textarea {
+  flex: 1;
+  border: none;
+  padding: 15px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 14px;
+  outline: none;
+  resize: none;
+}
+
+.sql-output {
+  border-top: 1px solid #dee2e6;
+  padding: 15px;
+  background: #f8f9fa;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.table-node {
+  background: white;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  min-width: 200px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.table-header {
+  background: #007bff;
+  color: white;
+  padding: 8px 12px;
+  font-weight: 600;
+  border-radius: 6px 6px 0 0;
+}
+
+.table-column {
+  padding: 6px 12px;
+  border-bottom: 1px solid #f1f3f4;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.table-column:last-child {
+  border-bottom: none;
+}
+
+.column-name {
+  font-weight: 500;
+}
+
+.column-type {
+  color: #6c757d;
+  font-size: 12px;
+}
+
+.primary-key {
+  color: #ffc107;
+}
+
+.foreign-key {
+  color: #28a745;
+}

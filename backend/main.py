@@ -204,7 +204,8 @@ async def generate_sql(schema: ERDSchema):
             
             columns_sql.append(col_def)
         
-        create_sql = f"CREATE TABLE {table.name} (\n    {',\n    '.join(columns_sql)}\n);"
+        columns_joined = ',\n    '.join(columns_sql)
+        create_sql = f"CREATE TABLE {table.name} (\n    {columns_joined}\n);"
         sql_statements.append(create_sql)
     
     # Then, add foreign key constraints
