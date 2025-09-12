@@ -16,6 +16,7 @@ import { Table, Relationship } from '../App';
 import TableNode from './TableNode';
 import ERDEdge from './ERDEdge';
 
+// Define node and edge types outside component to prevent React Flow warnings
 const nodeTypes = {
   table: TableNode,
 };
@@ -30,6 +31,7 @@ interface DiagramCanvasProps {
   onUpdateTable: (id: string, updates: Partial<Table>) => void;
   onRemoveTable: (id: string) => void;
   onAddRelationship: (relationship: Relationship) => void;
+  errorRelationships?: number[];
 }
 
 const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
@@ -38,6 +40,7 @@ const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   onUpdateTable,
   onRemoveTable,
   onAddRelationship,
+  errorRelationships = [],
 }) => {
   // Convert tables to React Flow nodes
   const initialNodes: Node[] = tables.map(table => ({
@@ -87,8 +90,18 @@ const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   // Update edges when relationships change
   React.useEffect(() => {
     const newEdges = relationships.map((rel, index) => {
-      // Determine visual style based on cardinality
-      const getEdgeStyle = (cardinality: string) => {
+      const isError = errorRelationships.includes(index);
+      
+      // Determine visual style based on cardinality with error override
+      const getEdgeStyle = (cardinality: string, hasError: boolean) => {
+        if (hasError) {
+          return {
+            stroke: '#ff0000', // Bright red for errors
+            strokeWidth: 3,
+            strokeDasharray: '8,4', // Dashed line for errors
+          };
+        }
+        
         switch (cardinality) {
           case '1:1':
             return {
@@ -125,7 +138,7 @@ const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         sourceHandle: rel.from_column,
         targetHandle: rel.to_column,
         type: 'erd',
-        style: getEdgeStyle(rel.cardinality),
+        style: getEdgeStyle(rel.cardinality, isError),
         data: {
           cardinality: rel.cardinality,
           label: rel.cardinality,
@@ -133,7 +146,7 @@ const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
       };
     });
     setEdges(newEdges);
-  }, [relationships, setEdges]);
+  }, [relationships, errorRelationships, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection) => {

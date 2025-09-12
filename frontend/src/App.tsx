@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import DiagramCanvas from './components/DiagramCanvas';
 import SQLEditor from './components/SQLEditor';
 import TemplatePanel from './components/TemplatePanel';
 import RelationshipPanel from './components/RelationshipPanel';
+import ValidationPanel from './components/ValidationPanel';
 import Toolbar from './components/Toolbar';
+import { SchemaValidator, ValidationError } from './utils/schemaValidator';
 
 export interface Table {
   id: string;
@@ -38,6 +40,19 @@ function App() {
   const [showSQLEditor, setShowSQLEditor] = useState(false);
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
   const [showRelationshipPanel, setShowRelationshipPanel] = useState(false);
+  const [showValidationPanel, setShowValidationPanel] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [errorRelationships, setErrorRelationships] = useState<number[]>([]);
+
+  // Validate schema whenever tables or relationships change
+  useEffect(() => {
+    const errors = SchemaValidator.validateSchema(tables, relationships);
+    setValidationErrors(errors);
+    
+    const tableMap = new Map(tables.map(t => [t.name, t]));
+    const errorRelIndexes = SchemaValidator.getRelationshipErrors(relationships, tableMap);
+    setErrorRelationships(errorRelIndexes);
+  }, [tables, relationships]);
 
   const addTable = (table: Omit<Table, 'id'>) => {
     const newTable = {
@@ -72,9 +87,17 @@ function App() {
     setRelationships(prev => [...prev, relationship]);
   };
 
-  const handleApplyTemplate = (templateTables: Table[], templateRelationships: Relationship[]) => {
+  const handleApplyTemplate = (templateTables: any[], templateRelationships: Relationship[]) => {
+    // Convert backend template tables to frontend format with proper IDs
+    const convertedTables: Table[] = templateTables.map(table => ({
+      id: table.name,
+      name: table.name,
+      columns: table.columns,
+      position: table.position || { x: Math.random() * 300 + 100, y: Math.random() * 300 + 100 }
+    }));
+    
     // Add template tables and relationships to existing ones
-    setTables(prev => [...prev, ...templateTables]);
+    setTables(prev => [...prev, ...convertedTables]);
     setRelationships(prev => [...prev, ...templateRelationships]);
   };
 
@@ -159,6 +182,7 @@ function App() {
             onUpdateTable={updateTable}
             onRemoveTable={removeTable}
             onAddRelationship={addRelationship}
+            errorRelationships={errorRelationships}
           />
         </div>
         
@@ -187,6 +211,37 @@ function App() {
         onRemoveRelationship={removeRelationship}
         onCreateJunctionTable={createJunctionTable}
       />
+      
+      <ValidationPanel
+        isVisible={showValidationPanel}
+        onClose={() => setShowValidationPanel(false)}
+        errors={validationErrors}
+      />
+      
+      {/* Validation indicator */}
+      {validationErrors.length > 0 && (
+        <div 
+          className="validation-indicator"
+          onClick={() => setShowValidationPanel(true)}
+          style={{
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            background: validationErrors.some(e => e.type === 'error') ? '#dc3545' : '#ffc107',
+            color: 'white',
+            padding: '10px 15px',
+            borderRadius: '25px',
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            zIndex: 999,
+            fontWeight: 'bold',
+            fontSize: '14px'
+          }}
+        >
+          {validationErrors.filter(e => e.type === 'error').length > 0 ? '🔴' : '🟡'} 
+          {validationErrors.length} Issue{validationErrors.length !== 1 ? 's' : ''}
+        </div>
+      )}
     </div>
   );
 }
