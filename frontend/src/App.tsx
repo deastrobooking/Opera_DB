@@ -37,9 +37,16 @@ function App() {
   const addTable = (table: Omit<Table, 'id'>) => {
     const newTable = {
       ...table,
-      id: `table_${Date.now()}`
+      id: table.name || `table_${Date.now()}` // Use table name as ID when available
     };
     setTables(prev => [...prev, newTable]);
+  };
+
+  const handleSQLParse = (tables: Table[], relationships?: Relationship[]) => {
+    setTables(tables);
+    if (relationships) {
+      setRelationships(relationships);
+    }
   };
 
   const updateTable = (id: string, updates: Partial<Table>) => {
@@ -90,7 +97,7 @@ function App() {
         {showSQLEditor && (
           <div style={{ width: '50%' }}>
             <SQLEditor
-              onSQLParse={setTables}
+              onSQLParse={handleSQLParse}
               tables={tables}
               relationships={relationships}
             />

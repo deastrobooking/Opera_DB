@@ -56,7 +56,9 @@ def parse_sql_to_erd(sql: str) -> ERDSchema:
         relationships = []
         
         for statement in parsed:
-            if statement.get_type() == 'CREATE':
+            statement_str = str(statement).upper()
+            # Check if statement contains CREATE TABLE
+            if 'CREATE TABLE' in statement_str:
                 table_data = parse_create_table(statement)
                 if table_data:
                     tables.append(table_data)
@@ -72,8 +74,8 @@ def parse_sql_to_erd(sql: str) -> ERDSchema:
                         relationships.append(Relationship(
                             from_table=table.name,
                             from_column=column.name,
-                            to_table=ref_table,
-                            to_column=ref_column,
+                            to_table=ref_table.lower(),
+                            to_column=ref_column.lower(),
                             relationship_type="many-to-one"
                         ))
         
@@ -85,15 +87,15 @@ def parse_sql_to_erd(sql: str) -> ERDSchema:
 def parse_create_table(statement) -> Optional[Table]:
     """Parse a single CREATE TABLE statement"""
     try:
-        # Extract table name
-        tokens = [token for token in statement.flatten() if not token.is_whitespace]
-        table_name = None
+        # Extract table name using a simpler approach
+        statement_str = str(statement)
         
-        for i, token in enumerate(tokens):
-            if token.ttype is None and token.value.upper() == 'TABLE':
-                if i + 1 < len(tokens):
-                    table_name = tokens[i + 1].value.strip('`"\'')
-                break
+        # Find CREATE TABLE pattern
+        create_table_match = re.search(r'CREATE\s+TABLE\s+(\w+)', statement_str, re.IGNORECASE)
+        if not create_table_match:
+            return None
+        
+        table_name = create_table_match.group(1).lower()  # Normalize to lowercase
         
         if not table_name:
             return None

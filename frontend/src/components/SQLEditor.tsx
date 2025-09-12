@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Table, Relationship } from '../App';
 
 interface SQLEditorProps {
-  onSQLParse: (tables: Table[]) => void;
+  onSQLParse: (tables: Table[], relationships?: Relationship[]) => void;
   tables: Table[];
   relationships: Relationship[];
 }
@@ -31,13 +31,23 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ onSQLParse, tables, relationships
       
       // Convert the parsed result to our Table format
       const parsedTables: Table[] = result.tables.map((table: any, index: number) => ({
-        id: `table_${Date.now()}_${index}`,
+        id: table.name, // Use table name as ID to match relationships
         name: table.name,
         columns: table.columns,
         position: { x: index * 250 + 50, y: 50 }
       }));
 
-      onSQLParse(parsedTables);
+      // Parse and normalize relationships to use consistent table names
+      const parsedRelationships: Relationship[] = result.relationships.map((rel: any) => ({
+        from_table: rel.from_table.toLowerCase(),
+        from_column: rel.from_column,
+        to_table: rel.to_table.toLowerCase(),
+        to_column: rel.to_column,
+        relationship_type: rel.relationship_type
+      }));
+
+      onSQLParse(parsedTables, parsedRelationships);
+      
       setOutput(`Successfully parsed ${parsedTables.length} tables and ${result.relationships.length} relationships`);
     } catch (error) {
       setOutput(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
