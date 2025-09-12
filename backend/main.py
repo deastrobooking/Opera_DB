@@ -39,6 +39,15 @@ class Relationship(BaseModel):
     to_table: str
     to_column: str
     relationship_type: str = "one-to-many"
+    cardinality: str = "1:N"  # 1:1, 1:N, N:M
+
+class Template(BaseModel):
+    id: str
+    name: str
+    description: str
+    category: str
+    tables: List[Table]
+    relationships: List[Relationship]
 
 class ERDSchema(BaseModel):
     tables: List[Table]
@@ -46,6 +55,176 @@ class ERDSchema(BaseModel):
 
 class SQLParseRequest(BaseModel):
     sql: str
+
+# Template definitions
+TEMPLATES = {
+    "user_auth": Template(
+        id="user_auth",
+        name="User Authentication",
+        description="Complete user authentication system with roles and permissions",
+        category="Authentication",
+        tables=[
+            Table(
+                name="users",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="username", type="VARCHAR(255)", nullable=False, unique=True),
+                    Column(name="email", type="VARCHAR(255)", nullable=False, unique=True),
+                    Column(name="password_hash", type="VARCHAR(255)", nullable=False),
+                    Column(name="first_name", type="VARCHAR(255)", nullable=True),
+                    Column(name="last_name", type="VARCHAR(255)", nullable=True),
+                    Column(name="is_active", type="BOOLEAN", nullable=False, default="true"),
+                    Column(name="created_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP"),
+                    Column(name="updated_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 50, "y": 50}
+            ),
+            Table(
+                name="roles",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="name", type="VARCHAR(100)", nullable=False, unique=True),
+                    Column(name="description", type="TEXT", nullable=True),
+                    Column(name="created_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 350, "y": 50}
+            ),
+            Table(
+                name="user_roles",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="user_id", type="INTEGER", nullable=False, foreign_key="users(id)"),
+                    Column(name="role_id", type="INTEGER", nullable=False, foreign_key="roles(id)"),
+                    Column(name="assigned_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 200, "y": 200}
+            )
+        ],
+        relationships=[
+            Relationship(from_table="user_roles", from_column="user_id", to_table="users", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="user_roles", from_column="role_id", to_table="roles", to_column="id", relationship_type="many-to-one", cardinality="N:1")
+        ]
+    ),
+    "ecommerce": Template(
+        id="ecommerce",
+        name="E-commerce Core",
+        description="Essential e-commerce tables for products, orders, and customers",
+        category="E-commerce",
+        tables=[
+            Table(
+                name="customers",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="email", type="VARCHAR(255)", nullable=False, unique=True),
+                    Column(name="first_name", type="VARCHAR(255)", nullable=False),
+                    Column(name="last_name", type="VARCHAR(255)", nullable=False),
+                    Column(name="phone", type="VARCHAR(20)", nullable=True),
+                    Column(name="created_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 50, "y": 50}
+            ),
+            Table(
+                name="products",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="name", type="VARCHAR(255)", nullable=False),
+                    Column(name="description", type="TEXT", nullable=True),
+                    Column(name="price", type="DECIMAL(10,2)", nullable=False),
+                    Column(name="stock_quantity", type="INTEGER", nullable=False, default="0"),
+                    Column(name="is_active", type="BOOLEAN", nullable=False, default="true"),
+                    Column(name="created_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 350, "y": 50}
+            ),
+            Table(
+                name="orders",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="customer_id", type="INTEGER", nullable=False, foreign_key="customers(id)"),
+                    Column(name="status", type="VARCHAR(50)", nullable=False, default="'pending'"),
+                    Column(name="total_amount", type="DECIMAL(10,2)", nullable=False),
+                    Column(name="created_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 50, "y": 250}
+            ),
+            Table(
+                name="order_items",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="order_id", type="INTEGER", nullable=False, foreign_key="orders(id)"),
+                    Column(name="product_id", type="INTEGER", nullable=False, foreign_key="products(id)"),
+                    Column(name="quantity", type="INTEGER", nullable=False),
+                    Column(name="unit_price", type="DECIMAL(10,2)", nullable=False)
+                ],
+                position={"x": 350, "y": 250}
+            )
+        ],
+        relationships=[
+            Relationship(from_table="orders", from_column="customer_id", to_table="customers", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="order_items", from_column="order_id", to_table="orders", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="order_items", from_column="product_id", to_table="products", to_column="id", relationship_type="many-to-one", cardinality="N:1")
+        ]
+    ),
+    "blog_cms": Template(
+        id="blog_cms",
+        name="Blog/CMS System",
+        description="Blog and content management structure with posts, categories, and tags",
+        category="Content Management",
+        tables=[
+            Table(
+                name="categories",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="name", type="VARCHAR(255)", nullable=False, unique=True),
+                    Column(name="slug", type="VARCHAR(255)", nullable=False, unique=True),
+                    Column(name="description", type="TEXT", nullable=True),
+                    Column(name="created_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 50, "y": 50}
+            ),
+            Table(
+                name="posts",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="title", type="VARCHAR(255)", nullable=False),
+                    Column(name="slug", type="VARCHAR(255)", nullable=False, unique=True),
+                    Column(name="content", type="TEXT", nullable=False),
+                    Column(name="excerpt", type="TEXT", nullable=True),
+                    Column(name="category_id", type="INTEGER", nullable=True, foreign_key="categories(id)"),
+                    Column(name="status", type="VARCHAR(20)", nullable=False, default="'draft'"),
+                    Column(name="published_at", type="TIMESTAMP", nullable=True),
+                    Column(name="created_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP"),
+                    Column(name="updated_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 350, "y": 50}
+            ),
+            Table(
+                name="tags",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="name", type="VARCHAR(100)", nullable=False, unique=True),
+                    Column(name="slug", type="VARCHAR(100)", nullable=False, unique=True),
+                    Column(name="created_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 650, "y": 50}
+            ),
+            Table(
+                name="post_tags",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="post_id", type="INTEGER", nullable=False, foreign_key="posts(id)"),
+                    Column(name="tag_id", type="INTEGER", nullable=False, foreign_key="tags(id)")
+                ],
+                position={"x": 500, "y": 250}
+            )
+        ],
+        relationships=[
+            Relationship(from_table="posts", from_column="category_id", to_table="categories", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="post_tags", from_column="post_id", to_table="posts", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="post_tags", from_column="tag_id", to_table="tags", to_column="id", relationship_type="many-to-one", cardinality="N:1")
+        ]
+    )
+}
 
 # Simple SQL parser for CREATE TABLE statements
 def parse_sql_to_erd(sql: str) -> ERDSchema:
@@ -312,6 +491,56 @@ def convert_to_postgresql_type(sql_type: str, is_primary_key: bool = False) -> s
         return sql_type.replace("DECIMAL", "NUMERIC")
     else:
         return sql_type  # Return as-is for unknown types
+
+@app.get("/api/templates")
+async def get_templates():
+    """Get all available templates organized by category"""
+    templates_by_category = {}
+    for template in TEMPLATES.values():
+        if template.category not in templates_by_category:
+            templates_by_category[template.category] = []
+        templates_by_category[template.category].append({
+            "id": template.id,
+            "name": template.name,
+            "description": template.description,
+            "table_count": len(template.tables),
+            "relationship_count": len(template.relationships)
+        })
+    return templates_by_category
+
+@app.get("/api/templates/{template_id}")
+async def get_template(template_id: str):
+    """Get a specific template by ID"""
+    if template_id not in TEMPLATES:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return TEMPLATES[template_id]
+
+class ApplyTemplateRequest(BaseModel):
+    template_id: str
+    offset_x: float = 0
+    offset_y: float = 0
+
+@app.post("/api/apply-template")
+async def apply_template(request: ApplyTemplateRequest):
+    """Apply a template to create tables and relationships"""
+    if request.template_id not in TEMPLATES:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    template = TEMPLATES[request.template_id]
+    
+    # Apply position offset to tables
+    tables_with_offset = []
+    for table in template.tables:
+        table_copy = table.dict()
+        if table_copy["position"]:
+            table_copy["position"]["x"] += request.offset_x
+            table_copy["position"]["y"] += request.offset_y
+        tables_with_offset.append(Table(**table_copy))
+    
+    return {
+        "tables": tables_with_offset,
+        "relationships": template.relationships
+    }
 
 @app.get("/api/health")
 async def health_check():

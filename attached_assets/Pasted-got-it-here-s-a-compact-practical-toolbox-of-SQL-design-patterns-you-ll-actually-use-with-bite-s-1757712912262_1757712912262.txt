@@ -1,0 +1,356 @@
+got it—here’s a compact, practical toolbox of SQL “design patterns” you’ll actually use, with bite-size examples (Postgres syntax unless noted). ping me if you want these tailored to MySQL/SQL Server/SQLite.
+
+# 1) Core schema patterns
+
+**Many-to-many (junction table)**
+
+```sql
+CREATE TABLE author (id bigserial PRIMARY KEY, name text NOT NULL);
+CREATE TABLE book   (id bigserial PRIMARY KEY, title text NOT NULL);
+CREATE TABLE author_book (
+  author_id bigint REFERENCES author(id),
+  book_id   bigint REFERENCES book(id),
+  PRIMARY KEY (author_id, book_id)
+);
+```
+
+**Hierarchies**
+
+* *Adjacency list* (simple, easy writes)
+
+```sql
+CREATE TABLE category(
+  id bigserial PRIMARY KEY,
+  name text NOT NULL,
+  parent_id bigint REFERENCES category(id)
+);
+```
+
+* *Closure table* (fast subtree/super-tree queries)
+
+```sql
+CREATE TABLE category_path(
+  ancestor bigint REFERENCES category(id),
+  descendant bigint REFERENCES category(id),
+  depth int NOT NULL,
+  PRIMARY KEY (ancestor, descendant)
+);
+```
+
+* *Materialized path* (string path; good for read-heavy)
+
+```sql
+-- path like '1.4.9.' with trigram/BTREE index for prefix scans
+path text NOT NULL,  -- store IDs joined by dots
+CREATE INDEX ON category (path text_pattern_ops);
+```
+
+**Temporal / history (SCD Type 2)**
+
+```sql
+CREATE TABLE customer_hist(
+  customer_id bigint,
+  name text,
+  valid_from timestamptz NOT NULL,
+  valid_to   timestamptz,
+  PRIMARY KEY (customer_id, valid_from)
+);
+
+-- Current snapshot:
+CREATE VIEW customer_current AS
+SELECT *
+FROM customer_hist
+WHERE valid_to IS NULL;
+```
+
+**Soft delete**
+
+```sql
+ALTER TABLE orders ADD COLUMN deleted_at timestamptz;
+CREATE UNIQUE INDEX ON orders (order_number) WHERE deleted_at IS NULL; -- keep unique among non-deleted
+```
+
+**Audit / append-only log**
+
+```sql
+CREATE TABLE order_events(
+  id bigserial PRIMARY KEY,
+  order_id bigint NOT NULL,
+  event_type text NOT NULL,
+  payload jsonb NOT NULL,
+  occurred_at timestamptz NOT NULL DEFAULT now()
+);
+```
+
+**Polymorphic reference (without EAV)**
+
+* Reference a small set of types via an enum + corresponding FK columns, with a CHECK to ensure one is set.
+
+```sql
+CREATE TYPE target_type AS ENUM ('user','org');
+
+CREATE TABLE note(
+  id bigserial PRIMARY KEY,
+  target_kind target_type NOT NULL,
+  user_id bigint REFERENCES app_user(id),
+  org_id  bigint REFERENCES org(id),
+  CHECK (
+    (target_kind='user' AND user_id IS NOT NULL AND org_id IS NULL) OR
+    (target_kind='org'  AND org_id  IS NOT NULL AND user_id IS NULL)
+  )
+);
+```
+
+**Multi-tenancy**
+
+```sql
+CREATE TABLE invoice(
+  tenant_id bigint NOT NULL REFERENCES tenant(id),
+  id bigserial,
+  amount numeric(12,2) NOT NULL,
+  PRIMARY KEY (tenant_id, id)
+);
+CREATE INDEX ON invoice (tenant_id, id);  -- partitioning key first
+-- (Optionally) Postgres RLS:
+ALTER TABLE invoice ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON invoice
+  USING (tenant_id = current_setting('app.tenant_id')::bigint);
+```
+
+# 2) Write patterns
+
+**UPSERT / idempotent writes**
+
+```sql
+INSERT INTO device(id, name, last_seen)
+VALUES ($1,$2,now())
+ON CONFLICT (id) DO UPDATE
+  SET name = EXCLUDED.name, last_seen = now();
+```
+
+**MERGE (for SCD or ETL)**
+
+```sql
+-- Postgres 15+
+MERGE INTO product p
+USING staging_product s ON p.sku = s.sku
+WHEN MATCHED THEN
+  UPDATE SET name=s.name, price=s.price
+WHEN NOT MATCHED THEN
+  INSERT (sku, name, price) VALUES (s.sku, s.name, s.price);
+```
+
+**Optimistic locking**
+
+```sql
+ALTER TABLE doc ADD COLUMN version bigint NOT NULL DEFAULT 0;
+
+UPDATE doc
+   SET body = $new, version = version + 1
+ WHERE id = $id AND version = $expected_version;
+-- check rowcount == 1
+```
+
+**Concurrency control (select for update)**
+
+```sql
+BEGIN;
+SELECT id FROM job
+ WHERE status='queued'
+ ORDER BY created_at
+ FOR UPDATE SKIP LOCKED
+ LIMIT 1;
+-- ...process...
+UPDATE job SET status='processing' WHERE id=$id;
+COMMIT;
+```
+
+# 3) Read/query patterns
+
+**Pagination (keyset, stable & fast)**
+
+```sql
+-- After last seen (created_at, id)
+SELECT *
+FROM events
+WHERE (created_at, id) < ($cursor_created_at, $cursor_id)
+ORDER BY created_at DESC, id DESC
+LIMIT 50;
+```
+
+**Top-N per group**
+
+```sql
+SELECT *
+FROM (
+  SELECT o.*, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY created_at DESC) rn
+  FROM orders o
+) x
+WHERE rn <= 3;
+```
+
+**Gaps & islands (contiguous ranges)**
+
+```sql
+WITH marked AS (
+  SELECT t.*, (value - ROW_NUMBER() OVER (ORDER BY value)) AS grp
+  FROM readings t
+)
+SELECT MIN(value) AS start_val, MAX(value) AS end_val
+FROM marked
+GROUP BY grp;
+```
+
+**De-duplication (keep latest)**
+
+```sql
+DELETE FROM event e
+USING event e2
+WHERE e.key = e2.key
+  AND e.id < e2.id;  -- or timestamp comparison
+```
+
+**Pivot / crosstab (Postgres)**
+
+```sql
+-- extension: tablefunc
+SELECT *
+FROM crosstab(
+  $$ SELECT customer_id, month, amount FROM m $$,
+  $$ VALUES ('2025-06'),('2025-07'),('2025-08') $$
+) AS ct(customer_id bigint, m06 numeric, m07 numeric, m08 numeric);
+```
+
+**Full-text / trigram search**
+
+```sql
+-- FTS
+ALTER TABLE article ADD COLUMN tsv tsvector
+  GENERATED ALWAYS AS (to_tsvector('english', title || ' ' || body)) STORED;
+CREATE INDEX ON article USING GIN (tsv);
+SELECT * FROM article WHERE tsv @@ plainto_tsquery('resiliency');
+
+-- Trigram for fuzzy match
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX ON vendor USING GIN (name gin_trgm_ops);
+SELECT * FROM vendor WHERE name % 'GreenLancer';
+```
+
+# 4) Performance & indexing patterns
+
+**Composite & covering index**
+
+```sql
+-- Query filter (tenant_id, status) + order by created_at
+CREATE INDEX ON ticket (tenant_id, status, created_at DESC) INCLUDE (assignee_id);
+```
+
+**Partial / filtered index (sparse hot set)**
+
+```sql
+CREATE INDEX ON job (status, created_at) WHERE status='queued';
+```
+
+**Partitioning (by time or tenant)**
+
+```sql
+CREATE TABLE logs (
+  ts timestamptz NOT NULL,
+  tenant_id bigint NOT NULL,
+  msg text
+) PARTITION BY RANGE (ts);
+
+CREATE TABLE logs_2025_09 PARTITION OF logs
+  FOR VALUES FROM ('2025-09-01') TO ('2025-10-01');
+```
+
+**BRIN for huge append-only tables (Postgres)**
+
+```sql
+CREATE INDEX ON metrics USING BRIN (ts);
+```
+
+# 5) Analytics patterns
+
+**Slowly changing dimensions – point-in-time join**
+
+```sql
+SELECT f.order_id, d.customer_name
+FROM fact_order f
+JOIN customer_hist d
+  ON d.customer_id = f.customer_id
+ AND f.order_date >= d.valid_from
+ AND (d.valid_to IS NULL OR f.order_date < d.valid_to);
+```
+
+**Star schema (facts & dimensions)**
+
+```sql
+-- fact_sales(fk to dim_date, dim_product, dim_store), all numeric measures
+-- dimensions are wide, static, and surrogate-keyed
+```
+
+**Window metrics (rolling, rank, percentiles)**
+
+```sql
+SELECT t.*,
+       AVG(val) OVER (PARTITION BY sensor ORDER BY ts
+                      ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS avg_10,
+       PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY val)
+         OVER (PARTITION BY sensor) AS p90
+FROM telemetry t;
+```
+
+# 6) Security & governance patterns
+
+**Least privilege via views**
+
+```sql
+CREATE VIEW v_customer_lite AS
+SELECT id, name, city FROM customer WHERE deleted_at IS NULL;
+GRANT SELECT ON v_customer_lite TO app_readonly;
+```
+
+**RLS (row-level security)**
+
+```sql
+ALTER TABLE doc ENABLE ROW LEVEL SECURITY;
+CREATE POLICY owner_can_read ON doc USING (owner_id = current_user_id());
+```
+
+**Data classification columns**
+
+```sql
+ALTER TABLE person ADD COLUMN pii_class smallint NOT NULL DEFAULT 0; -- 0=none,1=low,2=high
+```
+
+# 7) Migration & testing patterns
+
+**Forward-only migrations**
+
+* Create new objects → backfill → dual-write → cutover → drop old.
+
+**Blue/green columns**
+
+```sql
+ALTER TABLE orders ADD COLUMN price_cents_new bigint;
+-- backfill & dual-write in app
+-- cutover read path
+ALTER TABLE orders DROP COLUMN price_cents;
+ALTER TABLE orders RENAME COLUMN price_cents_new TO price_cents;
+```
+
+**Deterministic fixtures & property tests**
+
+* Use transactions per test; truncate between tests; seed minimal fixtures.
+
+# 8) Anti-patterns to avoid (usually)
+
+* **EAV (entity-attribute-value)** for core data (hard to constrain/index).
+* **OFFSET pagination** on deep pages (use keyset).
+* **UUIDv4 as clustering key** on huge write-heavy tables without a locality strategy (consider UUIDv7/time-ordered or surrogate BIGINT + UNIQUE natural key).
+* **Over-normalization** in read-heavy analytics; denormalize selectively with materialized views.
+
+---
+
+If you tell me your DB (Postgres/MySQL/SQL Server/SQLite) and a concrete use case (e.g., “PV projects + AHJ/utility rules” or “order service w/ quantity×price calc”), I’ll turn these into exact DDL, indexes, and query templates—including computed columns/triggers for your multiplier logic.

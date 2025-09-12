@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import './App.css';
 import DiagramCanvas from './components/DiagramCanvas';
 import SQLEditor from './components/SQLEditor';
+import TemplatePanel from './components/TemplatePanel';
 import Toolbar from './components/Toolbar';
 
 export interface Table {
@@ -33,6 +34,7 @@ function App() {
   const [tables, setTables] = useState<Table[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [showSQLEditor, setShowSQLEditor] = useState(false);
+  const [showTemplatePanel, setShowTemplatePanel] = useState(false);
 
   const addTable = (table: Omit<Table, 'id'>) => {
     const newTable = {
@@ -67,6 +69,12 @@ function App() {
     setRelationships(prev => [...prev, relationship]);
   };
 
+  const handleApplyTemplate = (templateTables: Table[], templateRelationships: Relationship[]) => {
+    // Add template tables and relationships to existing ones
+    setTables(prev => [...prev, ...templateTables]);
+    setRelationships(prev => [...prev, ...templateRelationships]);
+  };
+
   return (
     <div className="App" style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f8f9fa' }}>
       <header style={{ background: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', borderBottom: '1px solid #dee2e6' }}>
@@ -78,6 +86,7 @@ function App() {
       
       <Toolbar 
         onToggleSQLEditor={() => setShowSQLEditor(!showSQLEditor)}
+        onToggleTemplatePanel={() => setShowTemplatePanel(!showTemplatePanel)}
         onAddTable={addTable}
         tables={tables}
         relationships={relationships}
@@ -104,6 +113,12 @@ function App() {
           </div>
         )}
       </div>
+      
+      <TemplatePanel
+        isVisible={showTemplatePanel}
+        onClose={() => setShowTemplatePanel(false)}
+        onApplyTemplate={handleApplyTemplate}
+      />
     </div>
   );
 }
