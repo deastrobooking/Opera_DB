@@ -4,6 +4,7 @@ import { Table, Relationship } from '../App';
 interface ToolbarProps {
   onToggleSQLEditor: () => void;
   onToggleTemplatePanel: () => void;
+  onToggleRelationshipPanel: () => void;
   onAddTable: (table: Omit<Table, 'id'>) => void;
   tables: Table[];
   relationships: Relationship[];
@@ -12,6 +13,7 @@ interface ToolbarProps {
 const Toolbar: React.FC<ToolbarProps> = ({ 
   onToggleSQLEditor, 
   onToggleTemplatePanel,
+  onToggleRelationshipPanel,
   onAddTable, 
   tables, 
   relationships 
@@ -91,6 +93,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
       </button>
       <button className="btn btn-secondary" onClick={onToggleTemplatePanel}>
         📄 Templates
+      </button>
+      <button className="btn btn-secondary" onClick={onToggleRelationshipPanel}>
+        🔗 Relationships
       </button>
       <button className="btn btn-secondary" onClick={onToggleSQLEditor}>
         Toggle SQL Editor

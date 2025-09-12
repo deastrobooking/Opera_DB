@@ -3,6 +3,7 @@ import './App.css';
 import DiagramCanvas from './components/DiagramCanvas';
 import SQLEditor from './components/SQLEditor';
 import TemplatePanel from './components/TemplatePanel';
+import RelationshipPanel from './components/RelationshipPanel';
 import Toolbar from './components/Toolbar';
 
 export interface Table {
@@ -36,6 +37,7 @@ function App() {
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [showSQLEditor, setShowSQLEditor] = useState(false);
   const [showTemplatePanel, setShowTemplatePanel] = useState(false);
+  const [showRelationshipPanel, setShowRelationshipPanel] = useState(false);
 
   const addTable = (table: Omit<Table, 'id'>) => {
     const newTable = {
@@ -76,6 +78,61 @@ function App() {
     setRelationships(prev => [...prev, ...templateRelationships]);
   };
 
+  const updateRelationship = (index: number, updates: Partial<Relationship>) => {
+    setRelationships(prev => prev.map((rel, i) => 
+      i === index ? { ...rel, ...updates } : rel
+    ));
+  };
+
+  const removeRelationship = (index: number) => {
+    setRelationships(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const createJunctionTable = (fromTable: string, toTable: string) => {
+    const junctionTableName = `${fromTable}_${toTable}`;
+    
+    // Create production-grade junction table with composite constraints
+    const junctionTable = {
+      name: junctionTableName,
+      columns: [
+        { name: `${fromTable}_id`, type: 'INTEGER', nullable: false, primary_key: true, foreign_key: `${fromTable}(id)`, unique: false },
+        { name: `${toTable}_id`, type: 'INTEGER', nullable: false, primary_key: true, foreign_key: `${toTable}(id)`, unique: false },
+        { name: 'created_at', type: 'TIMESTAMP', nullable: false, primary_key: false, unique: false, default: 'CURRENT_TIMESTAMP' }
+      ],
+      position: { x: Math.random() * 300 + 150, y: Math.random() * 300 + 150 }
+    };
+
+    addTable(junctionTable);
+
+    // Remove the original N:M relationship that triggered this junction table creation
+    setRelationships(prev => prev.filter(rel => 
+      !(rel.from_table === fromTable && rel.to_table === toTable && rel.cardinality === 'N:M') &&
+      !(rel.from_table === toTable && rel.to_table === fromTable && rel.cardinality === 'N:M')
+    ));
+
+    // Add proper 1:N relationships FROM source tables TO junction table
+    const newRelationships: Relationship[] = [
+      {
+        from_table: fromTable,
+        from_column: 'id',
+        to_table: junctionTableName,
+        to_column: `${fromTable}_id`,
+        relationship_type: 'one-to-many',
+        cardinality: '1:N'
+      },
+      {
+        from_table: toTable,
+        from_column: 'id',
+        to_table: junctionTableName,
+        to_column: `${toTable}_id`,
+        relationship_type: 'one-to-many',
+        cardinality: '1:N'
+      }
+    ];
+
+    newRelationships.forEach(rel => addRelationship(rel));
+  };
+
   return (
     <div className="App" style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#f8f9fa' }}>
       <header style={{ background: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', borderBottom: '1px solid #dee2e6' }}>
@@ -88,6 +145,7 @@ function App() {
       <Toolbar 
         onToggleSQLEditor={() => setShowSQLEditor(!showSQLEditor)}
         onToggleTemplatePanel={() => setShowTemplatePanel(!showTemplatePanel)}
+        onToggleRelationshipPanel={() => setShowRelationshipPanel(!showRelationshipPanel)}
         onAddTable={addTable}
         tables={tables}
         relationships={relationships}
@@ -119,6 +177,15 @@ function App() {
         isVisible={showTemplatePanel}
         onClose={() => setShowTemplatePanel(false)}
         onApplyTemplate={handleApplyTemplate}
+      />
+      
+      <RelationshipPanel
+        isVisible={showRelationshipPanel}
+        onClose={() => setShowRelationshipPanel(false)}
+        relationships={relationships}
+        onUpdateRelationship={updateRelationship}
+        onRemoveRelationship={removeRelationship}
+        onCreateJunctionTable={createJunctionTable}
       />
     </div>
   );

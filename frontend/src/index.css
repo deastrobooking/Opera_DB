@@ -422,3 +422,209 @@ code {
   color: #666;
   font-size: 16px;
 }
+
+/* Relationship Panel Styles */
+.relationship-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.relationship-panel {
+  background: white;
+  border-radius: 8px;
+  max-width: 700px;
+  max-height: 80vh;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.relationship-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #dee2e6;
+  background: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+}
+
+.relationship-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.no-relationships {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+.relationships-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+.relationship-item {
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.relationship-item:hover {
+  border-color: #007bff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
+}
+
+.relationship-item.selected {
+  border-color: #007bff;
+  background: #f0f8ff;
+}
+
+.relationship-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.relationship-title {
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.table-name {
+  color: #007bff;
+  font-weight: bold;
+}
+
+.column-name {
+  color: #666;
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+.relationship-type {
+  color: #666;
+  font-size: 14px;
+}
+
+.relationship-controls {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #dee2e6;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.control-group label {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.control-group select {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+}
+
+.remove-relationship-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 8px;
+  width: fit-content;
+}
+
+.remove-relationship-btn:hover {
+  background: #c82333;
+}
+
+.cardinality-legend {
+  border-top: 1px solid #dee2e6;
+  padding-top: 20px;
+}
+
+.cardinality-legend h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.junction-table-section {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.junction-info {
+  margin-bottom: 8px;
+  color: #495057;
+  font-size: 14px;
+}
+
+.create-junction-btn {
+  background: #ffc107;
+  color: #212529;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  width: 100%;
+  transition: background 0.2s;
+}
+
+.create-junction-btn:hover {
+  background: #e0a800;
+}

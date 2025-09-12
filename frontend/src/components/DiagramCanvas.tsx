@@ -14,9 +14,14 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { Table, Relationship } from '../App';
 import TableNode from './TableNode';
+import ERDEdge from './ERDEdge';
 
 const nodeTypes = {
   table: TableNode,
+};
+
+const edgeTypes = {
+  erd: ERDEdge,
 };
 
 interface DiagramCanvasProps {
@@ -112,20 +117,18 @@ const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         }
       };
 
+
       return {
         id: `edge-${index}`,
         source: rel.from_table,
         target: rel.to_table,
         sourceHandle: rel.from_column,
         targetHandle: rel.to_column,
-        type: 'smoothstep',
+        type: 'erd',
         style: getEdgeStyle(rel.cardinality),
-        label: rel.cardinality,
-        labelStyle: { fontSize: 12, fontWeight: 'bold', fill: '#333' },
-        labelBgStyle: { fill: 'white', fillOpacity: 0.8 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: getEdgeStyle(rel.cardinality).stroke,
+        data: {
+          cardinality: rel.cardinality,
+          label: rel.cardinality,
         },
       };
     });
@@ -135,13 +138,15 @@ const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   const onConnect = useCallback(
     (params: Connection) => {
       if (params.source && params.target && params.sourceHandle && params.targetHandle) {
+        // Default cardinality is 1:N (one-to-many)
+        const cardinality = '1:N';
         const relationship: Relationship = {
           from_table: params.source,
           from_column: params.sourceHandle,
           to_table: params.target,
           to_column: params.targetHandle,
-          relationship_type: 'many-to-one',
-          cardinality: '1:N', // Default cardinality
+          relationship_type: 'one-to-many', // Consistent with 1:N cardinality
+          cardinality: cardinality,
         };
         onAddRelationship(relationship);
       }
@@ -166,6 +171,7 @@ const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         onConnect={onConnect}
         onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         snapToGrid
         snapGrid={[15, 15]}
