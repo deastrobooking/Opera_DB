@@ -13,7 +13,7 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ onSQLParse, tables, relationships
 
   const handleParse = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/parse-sql', {
+      const response = await fetch(`${window.location.protocol}//${window.location.hostname}:8000/api/parse-sql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +58,7 @@ const SQLEditor: React.FC<SQLEditorProps> = ({ onSQLParse, tables, relationships
     try {
       const schema = { tables, relationships };
       
-      const response = await fetch('http://localhost:8000/api/generate-sql', {
+      const response = await fetch(`${window.location.protocol}//${window.location.hostname}:8000/api/generate-sql`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

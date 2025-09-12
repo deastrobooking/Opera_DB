@@ -37,7 +37,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   const exportSQL = () => {
     const schema = { tables, relationships };
     
-    fetch('http://localhost:8000/api/generate-sql', {
+    fetch(`${window.location.protocol}//${window.location.hostname}:8000/api/generate-sql`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -63,7 +63,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   const exportPostgreSQL = () => {
     const schema = { tables, relationships };
     
-    fetch('http://localhost:8000/api/generate-postgresql', {
+    fetch(`${window.location.protocol}//${window.location.hostname}:8000/api/generate-postgresql`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

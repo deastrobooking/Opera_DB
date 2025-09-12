@@ -37,7 +37,7 @@ const TemplatePanel: React.FC<TemplatePanelProps> = ({
   const loadTemplates = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/api/templates');
+      const response = await fetch(`${window.location.protocol}//${window.location.hostname}:8000/api/templates`);
       if (!response.ok) throw new Error('Failed to load templates');
       const data = await response.json();
       setTemplates(data);
@@ -52,7 +52,7 @@ const TemplatePanel: React.FC<TemplatePanelProps> = ({
   const applyTemplate = async (templateId: string) => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/api/apply-template', {
+      const response = await fetch(`${window.location.protocol}//${window.location.hostname}:8000/api/apply-template`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
