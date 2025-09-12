@@ -1,0 +1,417 @@
+awesome—here’s a clean, battle-tested starter inventory model you can drop into Postgres (adaptable to MySQL/SQL Server). It covers products/variants, units, locations, stock movements, purchasing, sales, pricing, barcodes, lots/serials, and automatic line totals.
+
+# 0) Conventions
+
+* IDs are `bigserial` (or `bigint` FK).
+* Money in `numeric(12,2)`.
+* Use **stock moves** as the single source of truth; on-hand is derived.
+
+---
+
+# 1) Core catalog
+
+```sql
+-- Product categories (optional tree)
+CREATE TABLE category (
+  id           bigserial PRIMARY KEY,
+  name         text NOT NULL,
+  parent_id    bigint REFERENCES category(id),
+  UNIQUE (parent_id, name)
+);
+
+-- Base products (model/SKU family)
+CREATE TABLE product (
+  id           bigserial PRIMARY KEY,
+  name         text NOT NULL,
+  category_id  bigint REFERENCES category(id),
+  is_stocked   boolean NOT NULL DEFAULT true,   -- vs. service/non-stock
+  is_batch_tracked boolean NOT NULL DEFAULT false, -- requires lot/serial?
+  default_uom  text NOT NULL,                   -- e.g., 'ea', 'box', 'ft'
+  UNIQUE (name)
+);
+
+-- Variants (size/color/pack etc.). If you don’t need variants, use product alone.
+CREATE TABLE product_variant (
+  id           bigserial PRIMARY KEY,
+  product_id   bigint NOT NULL REFERENCES product(id) ON DELETE CASCADE,
+  sku          text NOT NULL UNIQUE,
+  attrs        jsonb NOT NULL DEFAULT '{}'::jsonb, -- {"color":"blue","size":"L"}
+  barcode      text,                                -- EAN/UPC (optional)
+  UNIQUE (product_id, attrs)
+);
+```
+
+---
+
+# 2) Units of measure (UoM) & conversions
+
+```sql
+CREATE TABLE uom (
+  code         text PRIMARY KEY,       -- 'ea','box','ft','m'
+  kind         text NOT NULL,          -- 'unit','length','mass', etc.
+  is_base      boolean NOT NULL DEFAULT false  -- one base per kind
+);
+
+CREATE TABLE uom_conversion (
+  from_code    text REFERENCES uom(code),
+  to_code      text REFERENCES uom(code),
+  factor       numeric(18,8) NOT NULL, -- qty_in_to = qty_in_from * factor
+  PRIMARY KEY (from_code, to_code),
+  CHECK (factor > 0)
+);
+```
+
+---
+
+# 3) Locations & stock
+
+```sql
+-- Physical or logical bins/warehouses
+CREATE TABLE location (
+  id           bigserial PRIMARY KEY,
+  code         text NOT NULL UNIQUE,     -- 'WH1', 'STORE-A', 'RETURNS'
+  name         text NOT NULL,
+  is_internal  boolean NOT NULL DEFAULT true
+);
+
+-- Lots/serials for batch tracking (only used if product.is_batch_tracked)
+CREATE TABLE lot (
+  id            bigserial PRIMARY KEY,
+  product_id    bigint NOT NULL REFERENCES product(id) ON DELETE CASCADE,
+  code          text NOT NULL,           -- lot # or serial #
+  mfg_date      date,
+  exp_date      date,
+  UNIQUE (product_id, code)
+);
+
+-- Stock moves: every movement of inventory
+CREATE TYPE move_kind AS ENUM ('in','out','xfer','adjust');
+
+CREATE TABLE stock_move (
+  id              bigserial PRIMARY KEY,
+  product_variant_id bigint NOT NULL REFERENCES product_variant(id),
+  uom_code        text NOT NULL REFERENCES uom(code),
+  qty             numeric(18,6) NOT NULL CHECK(qty > 0),
+  kind            move_kind NOT NULL,  -- direction is encoded with locations below
+  from_location_id bigint REFERENCES location(id),
+  to_location_id   bigint REFERENCES location(id),
+  lot_id           bigint REFERENCES lot(id),
+  reason           text,               -- 'PO receipt 1001', 'SO ship 2009', etc.
+  moved_at         timestamptz NOT NULL DEFAULT now(),
+  CHECK (
+    (kind = 'in'   AND to_location_id IS NOT NULL) OR
+    (kind = 'out'  AND from_location_id IS NOT NULL) OR
+    (kind = 'xfer' AND from_location_id IS NOT NULL AND to_location_id IS NOT NULL) OR
+    (kind = 'adjust')
+  )
+);
+
+-- On-hand per location (materialized for speed; recompute or maintain with triggers)
+CREATE MATERIALIZED VIEW mv_stock_on_hand AS
+SELECT
+  sm.product_variant_id,
+  COALESCE(sm.to_location_id, sm.from_location_id) AS location_id,
+  SUM(
+    CASE
+      WHEN sm.kind='in'   AND sm.to_location_id   IS NOT NULL THEN sm.qty
+      WHEN sm.kind='out'  AND sm.from_location_id IS NOT NULL THEN -sm.qty
+      WHEN sm.kind='xfer' THEN
+         CASE WHEN sm.to_location_id IS NOT NULL THEN sm.qty
+              WHEN sm.from_location_id IS NOT NULL THEN -sm.qty
+         END
+      WHEN sm.kind='adjust' THEN sm.qty -- sign encoded by positive/negative qty in practice
+    END
+  ) FILTER (WHERE sm.uom_code = 'ea')::numeric AS qty_ea -- assume normalized 'ea'
+FROM stock_move sm
+GROUP BY sm.product_variant_id, COALESCE(sm.to_location_id, sm.from_location_id);
+
+CREATE UNIQUE INDEX ON mv_stock_on_hand (product_variant_id, location_id);
+```
+
+> Tip: In production, normalize all move quantities to the product’s default\_uom using `uom_conversion` in a view so math is consistent.
+
+---
+
+# 4) Business partners
+
+```sql
+CREATE TABLE supplier (
+  id           bigserial PRIMARY KEY,
+  name         text NOT NULL UNIQUE,
+  email        text,
+  phone        text
+);
+
+CREATE TABLE customer (
+  id           bigserial PRIMARY KEY,
+  name         text NOT NULL,
+  email        text,
+  phone        text
+);
+```
+
+---
+
+# 5) Purchasing (PO) & receiving
+
+```sql
+CREATE TYPE order_status AS ENUM ('draft','approved','partial','received','cancelled');
+
+CREATE TABLE purchase_order (
+  id           bigserial PRIMARY KEY,
+  supplier_id  bigint NOT NULL REFERENCES supplier(id),
+  order_no     text NOT NULL UNIQUE,
+  status       order_status NOT NULL DEFAULT 'draft',
+  ordered_at   timestamptz NOT NULL DEFAULT now(),
+  expected_at  date
+);
+
+CREATE TABLE purchase_order_line (
+  id               bigserial PRIMARY KEY,
+  purchase_order_id bigint NOT NULL REFERENCES purchase_order(id) ON DELETE CASCADE,
+  product_variant_id bigint NOT NULL REFERENCES product_variant(id),
+  uom_code         text NOT NULL REFERENCES uom(code),
+  qty              numeric(18,6) NOT NULL CHECK(qty > 0),
+  unit_price       numeric(12,2) NOT NULL CHECK(unit_price >= 0),
+  line_total       numeric(14,2) GENERATED ALWAYS AS (qty * unit_price) STORED
+);
+```
+
+**Receiving → stock moves**
+
+```sql
+-- When receiving a PO line:
+-- INSERT INTO stock_move(kind, to_location_id, product_variant_id, uom_code, qty, reason)
+-- VALUES ('in', :WH1, :variant_id, :uom, :qty_received, 'PO '||:po_no);
+```
+
+---
+
+# 6) Sales (SO), reservations, shipping
+
+```sql
+CREATE TYPE so_status AS ENUM ('draft','confirmed','allocated','shipped','cancelled');
+
+CREATE TABLE sales_order (
+  id           bigserial PRIMARY KEY,
+  customer_id  bigint NOT NULL REFERENCES customer(id),
+  order_no     text NOT NULL UNIQUE,
+  status       so_status NOT NULL DEFAULT 'draft',
+  ordered_at   timestamptz NOT NULL DEFAULT now(),
+  ship_from_location_id bigint NOT NULL REFERENCES location(id)
+);
+
+CREATE TABLE sales_order_line (
+  id               bigserial PRIMARY KEY,
+  sales_order_id   bigint NOT NULL REFERENCES sales_order(id) ON DELETE CASCADE,
+  product_variant_id bigint NOT NULL REFERENCES product_variant(id),
+  uom_code         text NOT NULL REFERENCES uom(code),
+  qty              numeric(18,6) NOT NULL CHECK(qty > 0),
+  unit_price       numeric(12,2) NOT NULL CHECK(unit_price >= 0),
+  line_total       numeric(14,2) GENERATED ALWAYS AS (qty * unit_price) STORED
+);
+
+-- Optional: reservations table if you allocate before ship
+CREATE TABLE reservation (
+  id                 bigserial PRIMARY KEY,
+  sales_order_line_id bigint NOT NULL REFERENCES sales_order_line(id) ON DELETE CASCADE,
+  product_variant_id  bigint NOT NULL REFERENCES product_variant(id),
+  location_id         bigint NOT NULL REFERENCES location(id),
+  qty_reserved        numeric(18,6) NOT NULL CHECK(qty_reserved > 0),
+  created_at          timestamptz NOT NULL DEFAULT now()
+);
+
+-- Shipping → stock moves
+-- INSERT INTO stock_move(kind, from_location_id, product_variant_id, uom_code, qty, reason)
+-- VALUES ('out', :WH1, :variant_id, :uom, :qty_shipped, 'SO '||:so_no);
+```
+
+---
+
+# 7) Pricing & price lists (optional but handy)
+
+```sql
+CREATE TABLE price_list (
+  id           bigserial PRIMARY KEY,
+  name         text NOT NULL UNIQUE,
+  currency     text NOT NULL DEFAULT 'USD'
+);
+
+CREATE TABLE price_list_item (
+  id                 bigserial PRIMARY KEY,
+  price_list_id      bigint NOT NULL REFERENCES price_list(id) ON DELETE CASCADE,
+  product_variant_id bigint NOT NULL REFERENCES product_variant(id),
+  unit_price         numeric(12,2) NOT NULL CHECK(unit_price >= 0),
+  UNIQUE (price_list_id, product_variant_id)
+);
+```
+
+---
+
+# 8) Quick utilities
+
+**1) On-hand & available view (by location)**
+
+```sql
+CREATE VIEW v_stock_summary AS
+SELECT
+  p.id AS product_id,
+  pv.id AS product_variant_id,
+  pv.sku,
+  l.id AS location_id,
+  l.code AS location_code,
+  COALESCE(s.qty_ea, 0) AS on_hand,
+  COALESCE(s.qty_ea, 0)
+    - COALESCE((
+        SELECT COALESCE(SUM(r.qty_reserved),0)
+        FROM reservation r
+        WHERE r.product_variant_id = pv.id
+          AND r.location_id = l.id
+      ),0) AS available
+FROM product_variant pv
+JOIN product p ON p.id = pv.product_id
+CROSS JOIN location l
+LEFT JOIN mv_stock_on_hand s
+  ON s.product_variant_id = pv.id AND s.location_id = l.id;
+```
+
+**2) Reorder suggestions (min/max policy)**
+
+```sql
+CREATE TABLE reorder_policy (
+  product_variant_id bigint PRIMARY KEY REFERENCES product_variant(id) ON DELETE CASCADE,
+  location_id        bigint NOT NULL REFERENCES location(id),
+  min_qty            numeric(18,6) NOT NULL DEFAULT 0,
+  max_qty            numeric(18,6) NOT NULL DEFAULT 0
+);
+
+CREATE VIEW v_reorder AS
+SELECT
+  r.product_variant_id, r.location_id,
+  v.on_hand, v.available, r.min_qty, r.max_qty,
+  GREATEST(0, r.max_qty - v.available) AS suggested_order_qty
+FROM reorder_policy r
+JOIN v_stock_summary v
+  ON v.product_variant_id=r.product_variant_id AND v.location_id=r.location_id
+WHERE v.available < r.min_qty;
+```
+
+---
+
+# 9) Typical workflows (SQL snippets)
+
+**A) Receive PO 1001 (line id \:pol) into WH1**
+
+```sql
+WITH ins AS (
+  INSERT INTO stock_move(kind, to_location_id, product_variant_id, uom_code, qty, reason)
+  SELECT 'in', l.id, pol.product_variant_id, pol.uom_code, pol.qty, CONCAT('PO ', po.order_no)
+  FROM purchase_order_line pol
+  JOIN purchase_order po ON po.id = pol.purchase_order_id
+  JOIN location l ON l.code='WH1'
+  WHERE pol.id = $1
+  RETURNING 1
+)
+REFRESH MATERIALIZED VIEW CONCURRENTLY mv_stock_on_hand;
+```
+
+**B) Ship SO 2009 (line id \:sol) from WH1**
+
+```sql
+WITH ins AS (
+  INSERT INTO stock_move(kind, from_location_id, product_variant_id, uom_code, qty, reason)
+  SELECT 'out', l.id, sol.product_variant_id, sol.uom_code, sol.qty, CONCAT('SO ', so.order_no)
+  FROM sales_order_line sol
+  JOIN sales_order so ON so.id = sol.sales_order_id
+  JOIN location l ON l.code = so.ship_from_location_id::text  -- or join by id
+  WHERE sol.id = $1
+  RETURNING 1
+)
+REFRESH MATERIALIZED VIEW CONcurrently mv_stock_on_hand;
+```
+
+**C) Internal transfer WH1 → STORE-A**
+
+```sql
+INSERT INTO stock_move(kind, from_location_id, to_location_id, product_variant_id, uom_code, qty, reason)
+VALUES ('xfer', :wh1_id, :store_a_id, :variant_id, 'ea', 25, 'Replenishment');
+
+REFRESH MATERIALIZED VIEW CONcurrently mv_stock_on_hand;
+```
+
+---
+
+# 10) Calculated money totals (multiplier pattern you asked about before)
+
+Line totals are **generated**: `line_total = qty * unit_price`. To roll up order totals:
+
+```sql
+CREATE VIEW v_purchase_order_totals AS
+SELECT po.id, po.order_no,
+       SUM(pol.line_total) AS subtotal
+FROM purchase_order po
+JOIN purchase_order_line pol ON pol.purchase_order_id = po.id
+GROUP BY po.id, po.order_no;
+
+CREATE VIEW v_sales_order_totals AS
+SELECT so.id, so.order_no,
+       SUM(sol.line_total) AS subtotal
+FROM sales_order so
+JOIN sales_order_line sol ON sol.sales_order_id = so.id
+GROUP BY so.id, so.order_no;
+```
+
+---
+
+# 11) Minimal seed & queries
+
+```sql
+-- UoM
+INSERT INTO uom(code,kind,is_base) VALUES
+('ea','unit',true), ('box','unit',false);
+
+INSERT INTO uom_conversion(from_code,to_code,factor) VALUES
+('box','ea',10.0);
+
+-- Locations
+INSERT INTO location(code,name) VALUES ('WH1','Main Warehouse'), ('STORE-A','Retail A');
+
+-- Product & variant
+INSERT INTO product(name,default_uom) VALUES ('Hex Bolt 1/4"-20', 'ea');
+INSERT INTO product_variant(product_id, sku, attrs) VALUES (1,'HB-1420-SS', '{"grade":"SS","len":"1in"}');
+
+-- Receive 50 ea into WH1
+INSERT INTO stock_move(kind,to_location_id,product_variant_id,uom_code,qty,reason)
+SELECT 'in', l.id, 1,'ea',50,'Initial stock' FROM location l WHERE l.code='WH1';
+
+REFRESH MATERIALIZED VIEW mv_stock_on_hand;
+
+-- Check stock
+SELECT * FROM v_stock_summary WHERE sku='HB-1420-SS';
+
+-- Create SO and ship 12
+INSERT INTO sales_order(customer_id, order_no, ship_from_location_id)
+VALUES ( (INSERT INTO customer(name) VALUES ('Acme LLC') RETURNING id), 'SO-2009',
+         (SELECT id FROM location WHERE code='WH1') );
+
+INSERT INTO sales_order_line(sales_order_id, product_variant_id, uom_code, qty, unit_price)
+VALUES (1, 1, 'ea', 12, 0.35);
+
+-- Ship
+INSERT INTO stock_move(kind, from_location_id, product_variant_id, uom_code, qty, reason)
+VALUES ('out',(SELECT id FROM location WHERE code='WH1'), 1, 'ea', 12, 'SO SO-2009');
+
+REFRESH MATERIALIZED VIEW mv_stock_on_hand;
+```
+
+---
+
+## What you can add next
+
+* **Triggers** to auto-refresh `mv_stock_on_hand` (or replace with an incrementally maintained summary table).
+* **RLS** by tenant/location for multi-store setups.
+* **Kits/BOMs**: a `bom` + `bom_item` and explode into component reservations.
+* **Taxes/discounts**: columns on order lines + totals view.
+* **Cycle counts**: `stock_count` header + `stock_count_line` to reconcile via `adjust` moves.
+
+If you tell me your target DB (Postgres/MySQL/SQL Server) and whether you want **lots/serials** enforced, I’ll wire up the constraints, triggers (e.g., disallow shipping more than available), and a few canned reports (reorder, aging, slow movers).

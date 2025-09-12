@@ -81,19 +81,54 @@ const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
 
   // Update edges when relationships change
   React.useEffect(() => {
-    const newEdges = relationships.map((rel, index) => ({
-      id: `edge-${index}`,
-      source: rel.from_table,
-      target: rel.to_table,
-      sourceHandle: rel.from_column,
-      targetHandle: rel.to_column,
-      type: 'smoothstep',
-      style: { stroke: '#007bff', strokeWidth: 2 },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: '#007bff',
-      },
-    }));
+    const newEdges = relationships.map((rel, index) => {
+      // Determine visual style based on cardinality
+      const getEdgeStyle = (cardinality: string) => {
+        switch (cardinality) {
+          case '1:1':
+            return {
+              stroke: '#28a745', // Green for one-to-one
+              strokeWidth: 2,
+              strokeDasharray: '0',
+            };
+          case '1:N':
+            return {
+              stroke: '#007bff', // Blue for one-to-many
+              strokeWidth: 2,
+              strokeDasharray: '0',
+            };
+          case 'N:M':
+            return {
+              stroke: '#dc3545', // Red for many-to-many
+              strokeWidth: 3,
+              strokeDasharray: '5,5',
+            };
+          default:
+            return {
+              stroke: '#6c757d', // Gray for unknown
+              strokeWidth: 2,
+              strokeDasharray: '0',
+            };
+        }
+      };
+
+      return {
+        id: `edge-${index}`,
+        source: rel.from_table,
+        target: rel.to_table,
+        sourceHandle: rel.from_column,
+        targetHandle: rel.to_column,
+        type: 'smoothstep',
+        style: getEdgeStyle(rel.cardinality),
+        label: rel.cardinality,
+        labelStyle: { fontSize: 12, fontWeight: 'bold', fill: '#333' },
+        labelBgStyle: { fill: 'white', fillOpacity: 0.8 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: getEdgeStyle(rel.cardinality).stroke,
+        },
+      };
+    });
     setEdges(newEdges);
   }, [relationships, setEdges]);
 
@@ -106,6 +141,7 @@ const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
           to_table: params.target,
           to_column: params.targetHandle,
           relationship_type: 'many-to-one',
+          cardinality: '1:N', // Default cardinality
         };
         onAddRelationship(relationship);
       }

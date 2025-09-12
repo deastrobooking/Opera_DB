@@ -28,6 +28,7 @@ export interface Relationship {
   to_table: string;
   to_column: string;
   relationship_type: string;
+  cardinality: string; // 1:1, 1:N, N:M
 }
 
 function App() {
