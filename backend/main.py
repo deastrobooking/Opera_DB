@@ -223,6 +223,133 @@ TEMPLATES = {
             Relationship(from_table="post_tags", from_column="post_id", to_table="posts", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
             Relationship(from_table="post_tags", from_column="tag_id", to_table="tags", to_column="id", relationship_type="many-to-one", cardinality="N:1")
         ]
+    ),
+    "inventory_management": Template(
+        id="inventory_management",
+        name="Inventory Management",
+        description="Complete inventory system with products, stock moves, suppliers, and purchase/sales orders",
+        category="Inventory",
+        tables=[
+            Table(
+                name="product",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="name", type="TEXT", nullable=False),
+                    Column(name="category_id", type="INTEGER", nullable=True, foreign_key="category(id)"),
+                    Column(name="is_stocked", type="BOOLEAN", nullable=False, default="true"),
+                    Column(name="is_batch_tracked", type="BOOLEAN", nullable=False, default="false"),
+                    Column(name="default_uom", type="TEXT", nullable=False)
+                ],
+                position={"x": 50, "y": 50}
+            ),
+            Table(
+                name="product_variant",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="product_id", type="INTEGER", nullable=False, foreign_key="product(id)"),
+                    Column(name="sku", type="TEXT", nullable=False, unique=True),
+                    Column(name="attrs", type="TEXT", nullable=False, default="'{}'"),
+                    Column(name="barcode", type="TEXT", nullable=True)
+                ],
+                position={"x": 350, "y": 50}
+            ),
+            Table(
+                name="location",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="code", type="TEXT", nullable=False, unique=True),
+                    Column(name="name", type="TEXT", nullable=False),
+                    Column(name="is_internal", type="BOOLEAN", nullable=False, default="true")
+                ],
+                position={"x": 650, "y": 50}
+            ),
+            Table(
+                name="supplier",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="name", type="TEXT", nullable=False, unique=True),
+                    Column(name="email", type="TEXT", nullable=True),
+                    Column(name="phone", type="TEXT", nullable=True)
+                ],
+                position={"x": 50, "y": 200}
+            ),
+            Table(
+                name="stock_move",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="product_variant_id", type="INTEGER", nullable=False, foreign_key="product_variant(id)"),
+                    Column(name="uom_code", type="TEXT", nullable=False),
+                    Column(name="qty", type="DECIMAL(18,6)", nullable=False),
+                    Column(name="kind", type="TEXT", nullable=False),
+                    Column(name="from_location_id", type="INTEGER", nullable=True, foreign_key="location(id)"),
+                    Column(name="to_location_id", type="INTEGER", nullable=True, foreign_key="location(id)"),
+                    Column(name="reason", type="TEXT", nullable=True),
+                    Column(name="moved_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP")
+                ],
+                position={"x": 350, "y": 200}
+            ),
+            Table(
+                name="purchase_order",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="supplier_id", type="INTEGER", nullable=False, foreign_key="supplier(id)"),
+                    Column(name="order_no", type="TEXT", nullable=False, unique=True),
+                    Column(name="status", type="TEXT", nullable=False, default="'draft'"),
+                    Column(name="ordered_at", type="TIMESTAMP", nullable=False, default="CURRENT_TIMESTAMP"),
+                    Column(name="expected_at", type="DATE", nullable=True)
+                ],
+                position={"x": 650, "y": 200}
+            )
+        ],
+        relationships=[
+            Relationship(from_table="product_variant", from_column="product_id", to_table="product", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="stock_move", from_column="product_variant_id", to_table="product_variant", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="stock_move", from_column="from_location_id", to_table="location", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="stock_move", from_column="to_location_id", to_table="location", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="purchase_order", from_column="supplier_id", to_table="supplier", to_column="id", relationship_type="many-to-one", cardinality="N:1")
+        ]
+    ),
+    "hierarchical_data": Template(
+        id="hierarchical_data",
+        name="Hierarchical Data Patterns",
+        description="Common patterns for storing hierarchical data: adjacency list, closure table, and materialized path",
+        category="Data Patterns",
+        tables=[
+            Table(
+                name="category",
+                columns=[
+                    Column(name="id", type="INTEGER", nullable=False, primary_key=True),
+                    Column(name="name", type="TEXT", nullable=False),
+                    Column(name="parent_id", type="INTEGER", nullable=True, foreign_key="category(id)"),
+                    Column(name="path", type="TEXT", nullable=False)
+                ],
+                position={"x": 50, "y": 50}
+            ),
+            Table(
+                name="category_path",
+                columns=[
+                    Column(name="ancestor", type="INTEGER", nullable=False, foreign_key="category(id)"),
+                    Column(name="descendant", type="INTEGER", nullable=False, foreign_key="category(id)"),
+                    Column(name="depth", type="INTEGER", nullable=False)
+                ],
+                position={"x": 350, "y": 50}
+            ),
+            Table(
+                name="customer_hist",
+                columns=[
+                    Column(name="customer_id", type="INTEGER", nullable=False),
+                    Column(name="name", type="TEXT", nullable=True),
+                    Column(name="valid_from", type="TIMESTAMP", nullable=False),
+                    Column(name="valid_to", type="TIMESTAMP", nullable=True)
+                ],
+                position={"x": 650, "y": 50}
+            )
+        ],
+        relationships=[
+            Relationship(from_table="category", from_column="parent_id", to_table="category", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="category_path", from_column="ancestor", to_table="category", to_column="id", relationship_type="many-to-one", cardinality="N:1"),
+            Relationship(from_table="category_path", from_column="descendant", to_table="category", to_column="id", relationship_type="many-to-one", cardinality="N:1")
+        ]
     )
 }
 
