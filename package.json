@@ -1,0 +1,15 @@
+{
+  "name": "erd-diagram-tool",
+  "version": "1.0.0",
+  "description": "ERD Diagram Tool - Visual database schema designer",
+  "private": true,
+  "scripts": {
+    "install:frontend": "cd frontend && npm install",
+    "build:frontend": "cd frontend && npm run build",
+    "build": "npm run install:frontend && npm run build:frontend",
+    "start": "cd backend && uvicorn main:app --host 0.0.0.0 --port 5000"
+  },
+  "workspaces": [
+    "frontend"
+  ]
+}
