@@ -674,4 +674,28 @@ async def health_check():
     return {"status": "healthy", "service": "ERD Diagram Tool API"}
 
 if __name__ == "__main__":
+    import os
+    
+    # In production (deployment), serve the React build files
+    if os.getenv("REPLIT_DEPLOYMENT") == "1":
+        from fastapi.responses import FileResponse
+        
+        # Mount the React build folder
+        app.mount("/static", StaticFiles(directory="../frontend/build/static"), name="static")
+        
+        # Catch-all route to serve index.html for React Router
+        @app.get("/{full_path:path}")
+        async def serve_react_app(full_path: str):
+            # Serve API routes normally
+            if full_path.startswith("api/"):
+                return {"detail": "Not Found"}
+            
+            # Check if file exists in build folder
+            file_path = f"../frontend/build/{full_path}"
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                return FileResponse(file_path)
+            
+            # Default to index.html for React Router
+            return FileResponse("../frontend/build/index.html")
+    
     uvicorn.run(app, host="0.0.0.0", port=8000)
